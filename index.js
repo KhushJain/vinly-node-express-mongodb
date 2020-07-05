@@ -1,3 +1,4 @@
+require('express-async-errors');    // Used for handling errors
 const express = require('express');
 const mongoose = require('mongoose');
 const genres = require('./routes/genres');
@@ -6,12 +7,41 @@ const movies = require('./routes/movies');
 const rentals = require('./routes/rentals');
 const users = require('./routes/users');
 const auth = require('./routes/auth');
+const winston = require('winston');     // For logging errors
+require('winston-mongodb');     // For logging errors in mongodb
 const error = require('./middleware/error');
-const config = require('config');
-const Joi = require('joi');
+const config = require('config');   // For configuring settings
+const Joi = require('joi');     // For data validation
 Joi.objectId = require('joi-objectid')(Joi);    // For validating object id
 
 const app = express()
+
+// // For Uncaught Exceptions
+// process.on('uncaughtException', (e) => {
+//     //console.log('We got an uncaught exception!');
+//     winston.error(e.message, e);
+//     process.exit(1);
+// });
+// OR
+winston.handleExceptions(new winston.transports.File({ filename: 'exceptions.log' }));
+
+
+// For Unhandled Promise Rejections
+process.on('unhandledRejection', (e) => {
+    //console.log('We got an unhandled promise rejection!');
+    // winston.error(e.message, e);
+    // process.exit(1);
+    throw e;
+});
+
+// For logging erros
+winston.add(winston.transports.File, { filename: 'logfile.log' });
+// For logging errors in mongodb (database)
+winston.add(winston.transports.MongoDB, { 
+    db: 'mongodb://localhost/vinly',
+    //level: 'error'
+});
+
 
 if (!config.get('jwtPrivateKey')) {
     console.log('FATAL ERROR: jwtPrivateKey is not defined!');
@@ -37,8 +67,12 @@ app.use('/api/rentals', rentals);
 app.use('/api/users', users);
 app.use('/api/auth', auth);
 
+// Error Handling when we get an internal error
+app.use(error);
+
 
 const port = process.env.PORT || 3000;
+
 
 app.get('/', (req, res) => {
     res.render('index', { title:'My App',message: 'Hello' })
